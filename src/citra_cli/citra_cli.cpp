@@ -14,26 +14,21 @@
 namespace CitraCLI {
 
 bool CheckForOptions(const char* optstring, int argc, char* argv[]) {
-    const int original_opterr = opterr;
-    opterr = 0; // Temporarily suppress invalid option messages
-
-    bool return_value = false;
-    int option;
-    while ((option = getopt(argc, argv, optstring)) != -1) {
+    for (int arg_i = 1; arg_i < argc; ++arg_i) {
+        const char* arg = argv[arg_i];
+        if (!arg || arg[0] != '-' || arg[1] == '\0' || arg[1] == '-') {
+            continue;
+        }
         for (size_t i = 0; optstring[i] != '\0'; ++i) {
             if (optstring[i] == ':') {
                 continue;
             }
-            if (option == optstring[i]) {
-                return_value = true;
-                break;
+            if (arg[1] == optstring[i]) {
+                return true;
             }
         }
     }
-
-    opterr = original_opterr;
-    optind = 1; // Reset getopt so that it can be used again
-    return return_value;
+    return false;
 }
 
 int ParseCommand(int argc, char* argv[]) {

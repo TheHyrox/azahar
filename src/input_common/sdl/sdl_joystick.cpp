@@ -61,19 +61,40 @@ bool SDLJoystick::HasMotion() const {
 bool SDLJoystick::GetButton(int button, bool isController) const {
     if (!sdl_joystick)
         return false;
-    if (isController)
-        return SDL_GameControllerGetButton(sdl_controller.get(),
-                                           static_cast<SDL_GameControllerButton>(button));
+    if (isController) {
+        if (sdl_controller) {
+            return SDL_GameControllerGetButton(sdl_controller.get(),
+                                               static_cast<SDL_GameControllerButton>(button)) != 0;
+        }
+        // Fallback for generic SDL joysticks without an SDL_GameController mapping
+        switch (button) {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            return GetHatDirection(0, SDL_HAT_UP);
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            return GetHatDirection(0, SDL_HAT_DOWN);
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            return GetHatDirection(0, SDL_HAT_LEFT);
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            return GetHatDirection(0, SDL_HAT_RIGHT);
+        default:
+            if (button >= 0 && button < SDL_JoystickNumButtons(sdl_joystick.get())) {
+                return SDL_JoystickGetButton(sdl_joystick.get(), button) != 0;
+            }
+            return false;
+        }
+    }
     return SDL_JoystickGetButton(sdl_joystick.get(), button) != 0;
 }
 
 float SDLJoystick::GetAxis(int axis, bool isController) const {
     if (!sdl_joystick)
         return 0.0;
-    if (isController)
+    if (isController && sdl_controller)
         return SDL_GameControllerGetAxis(sdl_controller.get(),
                                          static_cast<SDL_GameControllerAxis>(axis)) /
                32767.0f;
+    if (axis < 0 || axis >= SDL_JoystickNumAxes(sdl_joystick.get()))
+        return 0.0f;
     const int16_t center = joystick_axis_centers.count(axis) ? joystick_axis_centers.at(axis) : 0;
     const auto delta = SDL_JoystickGetAxis(sdl_joystick.get(), axis) - center;
     const float range = delta >= 0 ? (32767.0f - center) : (center - (-32768.0f));

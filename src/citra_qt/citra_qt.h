@@ -6,6 +6,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 #ifdef __unix__
@@ -437,6 +438,31 @@ private:
     bool game_paused_for_dumping = false;
 
     int gdbport_from_arg = -1;
+
+    struct CLIOverrides {
+        std::optional<Settings::LayoutOption> layout_option;
+        std::optional<Settings::SmallScreenPosition> small_screen_position;
+        std::optional<float> large_screen_proportion;
+        std::optional<bool> swap_screen;
+        std::optional<bool> upright_screen;
+        std::optional<int> screen_gap;
+        std::optional<u32> resolution_factor;
+        std::optional<Settings::GraphicsAPI> graphics_api;
+        std::optional<Settings::TextureFilter> texture_filter;
+        std::optional<Settings::TextureSampling> texture_sampling;
+        std::optional<bool> filter_mode;
+        std::optional<bool> use_integer_scaling;
+        std::optional<Settings::AspectRatio> aspect_ratio;
+        std::optional<bool> use_vsync;
+        std::optional<Settings::StereoRenderOption> render_3d;
+        std::optional<u32> factor_3d;
+        std::optional<s32> cpu_clock_percentage;
+        std::optional<bool> is_new_3ds;
+        std::optional<bool> enable_audio_stretching;
+        std::optional<float> volume;
+    } cli_overrides;
+
+    void ApplyCLIOverrides();
 
     QString gl_renderer;
     std::vector<QString> physical_devices;

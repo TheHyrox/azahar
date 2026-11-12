@@ -11,6 +11,7 @@
 #include "citra_qt/configuration/config.h"
 #include "citra_qt/setting_qkeys.h"
 #include "common/file_util.h"
+#include "common/param_package.h"
 #include "common/settings.h"
 #include "core/hle/service/service.h"
 #include "input_common/main.h"
@@ -94,12 +95,12 @@ const std::vector<UISettings::Shortcut> QtConfig::default_hotkeys{ {
      {QStringLiteral("Rotate Screens Upright"),   QStringLiteral("Main Window"), {QStringLiteral("F8"),     QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Save to Oldest Non-Quicksave Slot"),  QStringLiteral("Main Window"), {QStringLiteral("Ctrl+C"), QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Stop Emulation"),           QStringLiteral("Main Window"), {QStringLiteral("F5"),     QStringLiteral(""), Qt::ApplicationShortcut}},
-     {QStringLiteral("Swap Screens"),             QStringLiteral("Main Window"), {QStringLiteral("F9"),     QStringLiteral(""), Qt::ApplicationShortcut}},
+     {QStringLiteral("Swap Screens"),             QStringLiteral("Main Window"), {QStringLiteral("F9"),     QStringLiteral("api:controller,button:7,engine:sdl,guid:0,maptype:all,name:LS Click,port:0"), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle 3D"),                QStringLiteral("Main Window"), {QStringLiteral("Ctrl+3"), QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Custom Textures"),   QStringLiteral("Main Window"), {QStringLiteral("F7"),     QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Filter Bar"),        QStringLiteral("Main Window"), {QStringLiteral("Ctrl+F"), QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Per-Application Speed"),  QStringLiteral("Main Window"), {QStringLiteral("Ctrl+Z"), QStringLiteral(""), Qt::ApplicationShortcut}},
-     {QStringLiteral("Toggle Screen Layout"),     QStringLiteral("Main Window"), {QStringLiteral("F10"),    QStringLiteral(""), Qt::ApplicationShortcut}},
+     {QStringLiteral("Toggle Screen Layout"),     QStringLiteral("Main Window"), {QStringLiteral("F10"),    QStringLiteral("api:controller,button:8,engine:sdl,guid:0,maptype:all,name:RS Click,port:0"), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Status Bar"),        QStringLiteral("Main Window"), {QStringLiteral("Ctrl+S"), QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Texture Dumping"),   QStringLiteral("Main Window"), {QStringLiteral(""),       QStringLiteral(""), Qt::ApplicationShortcut}},
      {QStringLiteral("Toggle Turbo Mode"),        QStringLiteral("Main Window"), {QStringLiteral(""),      QStringLiteral(""), Qt::ApplicationShortcut}},
@@ -390,14 +391,121 @@ void QtConfig::ReadControlValues() {
 
     Settings::values.current_input_profile_index = ReadSetting(Settings::QKeys::profile, 0).toInt();
 
-    const auto append_profile = [this, num_touch_from_button_maps] {
+    const auto generate_default_sdl_button = [this](int button_id) -> std::string {
+        Common::ParamPackage param({
+            {"engine", "sdl"},
+            {"api", "controller"},
+            {"guid", "0"},
+            {"port", "0"},
+            {"maptype", "all"},
+            {"code", std::to_string(default_buttons[button_id])},
+        });
+        using namespace Settings::NativeButton;
+        switch (button_id) {
+        case A:
+            param.Set("button", 1);
+            param.Set("name", "B / ●");
+            break;
+        case B:
+            param.Set("button", 0);
+            param.Set("name", "A / ✖");
+            break;
+        case X:
+            param.Set("button", 3);
+            param.Set("name", "Y / ▲");
+            break;
+        case Y:
+            param.Set("button", 2);
+            param.Set("name", "X / ■");
+            break;
+        case Up:
+            param.Set("button", 11);
+            param.Set("name", "D-Pad Up");
+            break;
+        case Down:
+            param.Set("button", 12);
+            param.Set("name", "D-Pad Down");
+            break;
+        case Left:
+            param.Set("button", 13);
+            param.Set("name", "D-Pad Left");
+            break;
+        case Right:
+            param.Set("button", 14);
+            param.Set("name", "D-Pad Right");
+            break;
+        case L:
+            param.Set("button", 9);
+            param.Set("name", "LB");
+            break;
+        case R:
+            param.Set("button", 10);
+            param.Set("name", "RB");
+            break;
+        case Start:
+            param.Set("button", 6);
+            param.Set("name", "Start");
+            break;
+        case Select:
+            param.Set("button", 4);
+            param.Set("name", "Back/Select");
+            break;
+        case ZL:
+            param.Set("axis", 4);
+            param.Set("direction", "+");
+            param.Set("threshold", 0.5f);
+            param.Set("name", "Left Trigger");
+            break;
+        case ZR:
+            param.Set("axis", 5);
+            param.Set("direction", "+");
+            param.Set("threshold", 0.5f);
+            param.Set("name", "Right Trigger");
+            break;
+        default:
+            return InputCommon::GenerateKeyboardParam(default_buttons[button_id]);
+        }
+        return param.Serialize();
+    };
+
+    const auto generate_default_sdl_analog = [this](int analog_id) -> std::string {
+        Common::ParamPackage param({
+            {"engine", "sdl"},
+            {"api", "controller"},
+            {"guid", "0"},
+            {"port", "0"},
+            {"maptype", "all"},
+            {"deadzone", "0.100000"},
+            {"up", InputCommon::GenerateKeyboardParam(default_analogs[analog_id][0])},
+            {"down", InputCommon::GenerateKeyboardParam(default_analogs[analog_id][1])},
+            {"left", InputCommon::GenerateKeyboardParam(default_analogs[analog_id][2])},
+            {"right", InputCommon::GenerateKeyboardParam(default_analogs[analog_id][3])},
+            {"modifier", InputCommon::GenerateKeyboardParam(default_analogs[analog_id][4])},
+            {"modifier_scale", "0.500000"},
+        });
+        if (analog_id == Settings::NativeAnalog::CirclePad) {
+            param.Set("axis_x", 0);
+            param.Set("axis_y", 1);
+            param.Set("name_x", "Left Stick X");
+            param.Set("name_y", "Left Stick Y");
+        } else {
+            param.Set("axis_x", 2);
+            param.Set("axis_y", 3);
+            param.Set("name_x", "Right Stick X");
+            param.Set("name_y", "Right Stick Y");
+        }
+        return param.Serialize();
+    };
+
+    const auto append_profile = [this, num_touch_from_button_maps, &generate_default_sdl_button,
+                                 &generate_default_sdl_analog] {
         Settings::InputProfile profile;
         profile.name =
             ReadSetting(Settings::QKeys::name, QStringLiteral("Default")).toString().toStdString();
         profile.maptype = static_cast<Settings::InputMappingType>(
-            ReadSetting(Settings::QKeys::input_maptype, 2).toInt());
+            ReadSetting(Settings::QKeys::input_maptype, 0).toInt());
         for (int i = 0; i < Settings::NativeButton::NumButtons; ++i) {
-            std::string default_param = InputCommon::GenerateKeyboardParam(default_buttons[i]);
+            std::string default_param = generate_default_sdl_button(i);
             profile.buttons[i] = ReadSetting(QString::fromUtf8(Settings::NativeButton::mapping[i]),
                                              QString::fromStdString(default_param))
                                      .toString()
@@ -406,9 +514,7 @@ void QtConfig::ReadControlValues() {
                 profile.buttons[i] = default_param;
         }
         for (int i = 0; i < Settings::NativeAnalog::NumAnalogs; ++i) {
-            std::string default_param = InputCommon::GenerateAnalogParamFromKeys(
-                default_analogs[i][0], default_analogs[i][1], default_analogs[i][2],
-                default_analogs[i][3], default_analogs[i][4], 0.5f);
+            std::string default_param = generate_default_sdl_analog(i);
             profile.analogs[i] =
                 ReadSetting(QString::fromStdString(Settings::NativeAnalog::mapping[i]),
                             QString::fromStdString(default_param))
@@ -416,6 +522,27 @@ void QtConfig::ReadControlValues() {
                     .toStdString();
             if (profile.analogs[i].empty())
                 profile.analogs[i] = default_param;
+        }
+        // Auto-upgrade legacy keyboard-only default profiles so controllers work out-of-the-box
+        bool all_keyboard_buttons = true;
+        for (int i = 0; i <= Settings::NativeButton::Select; ++i) {
+            Common::ParamPackage pkg(profile.buttons[i]);
+            if (pkg.Get("engine", "") != "keyboard") {
+                all_keyboard_buttons = false;
+                break;
+            }
+        }
+        if (all_keyboard_buttons) {
+            profile.maptype = Settings::InputMappingType::AllControllers;
+            for (int i = 0; i < Settings::NativeButton::NumButtons; ++i) {
+                profile.buttons[i] = generate_default_sdl_button(i);
+            }
+            for (int i = 0; i < Settings::NativeAnalog::NumAnalogs; ++i) {
+                Common::ParamPackage apkg(profile.analogs[i]);
+                if (apkg.Get("engine", "") == "analog_from_button") {
+                    profile.analogs[i] = generate_default_sdl_analog(i);
+                }
+            }
         }
         profile.motion_device =
             ReadSetting(Settings::QKeys::motion_device,
@@ -766,12 +893,15 @@ void QtConfig::ReadShortcutValues() {
         // No longer using ReadSetting for shortcut.second as it innacurately returns a value of 1
         // for WidgetWithChildrenShortcut which is a value of 3. Needed to fix shortcuts the open
         // a file dialog in windowed mode
+        QString ctrl_seq =
+            ReadSetting(Settings::QKeys::controller_keyseq, shortcut.controller_keyseq).toString();
+        if (ctrl_seq.isEmpty() && !shortcut.controller_keyseq.isEmpty()) {
+            ctrl_seq = shortcut.controller_keyseq;
+        }
         UISettings::values.shortcuts.push_back(
             {name,
              group,
-             {ReadSetting(Settings::QKeys::KeySeq, shortcut.keyseq).toString(),
-              ReadSetting(Settings::QKeys::controller_keyseq, shortcut.controller_keyseq)
-                  .toString(),
+             {ReadSetting(Settings::QKeys::KeySeq, shortcut.keyseq).toString(), ctrl_seq,
               shortcut.context}});
         qt_config->endGroup();
         qt_config->endGroup();

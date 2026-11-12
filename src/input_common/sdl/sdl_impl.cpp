@@ -21,6 +21,8 @@
 #include "common/param_package.h"
 #include "common/threadsafe_queue.h"
 #include "core/frontend/input.h"
+#include "input_common/keyboard.h"
+#include "input_common/main.h"
 #include "input_common/sdl/sdl_impl.h"
 
 // These structures are not actually defined in the headers, so we need to define them here to use
@@ -476,10 +478,15 @@ void SDLState::CloseJoysticks() {
 class SDLButton final : public Input::ButtonDevice {
 public:
     explicit SDLButton(std::shared_ptr<std::vector<std::shared_ptr<SDLJoystick>>> joysticks_,
-                       int button_, int port_ = -1, bool isController_ = true)
-        : joysticks(joysticks_), button(button_), isController(isController_), port(port_) {}
+                       int button_, int port_ = -1, bool isController_ = true,
+                       std::unique_ptr<Input::ButtonDevice> fallback_ = nullptr)
+        : joysticks(joysticks_), button(button_), isController(isController_), port(port_),
+          fallback(std::move(fallback_)) {}
 
     bool GetStatus() const override {
+        if (fallback && fallback->GetStatus()) {
+            return true;
+        }
         if (port >= 0 && joysticks && static_cast<int>(joysticks->size()) > port &&
             joysticks->at(port)) {
             return joysticks->at(port)->GetButton(button, isController);
@@ -497,6 +504,7 @@ private:
     int button;
     bool isController = true;
     int port;
+    std::unique_ptr<Input::ButtonDevice> fallback;
 };
 
 class SDLDirectionButton final : public Input::ButtonDevice {
@@ -529,11 +537,16 @@ class SDLAxisButton final : public Input::ButtonDevice {
 public:
     explicit SDLAxisButton(std::shared_ptr<std::vector<std::shared_ptr<SDLJoystick>>> joysticks_,
                            int axis_, float threshold_, bool trigger_if_greater_, int port_ = -1,
-                           bool isController_ = true)
+                           bool isController_ = true,
+                           std::unique_ptr<Input::ButtonDevice> fallback_ = nullptr)
         : joysticks(joysticks_), axis(axis_), threshold(threshold_),
-          trigger_if_greater(trigger_if_greater_), isController(isController_), port(port_) {}
+          trigger_if_greater(trigger_if_greater_), isController(isController_), port(port_),
+          fallback(std::move(fallback_)) {}
 
     bool GetStatus() const override {
+        if (fallback && fallback->GetStatus()) {
+            return true;
+        }
         if (port >= 0 && joysticks && static_cast<int>(joysticks->size()) > port &&
             joysticks->at(port)) {
 
@@ -564,14 +577,16 @@ private:
     bool trigger_if_greater;
     bool isController = true;
     int port;
+    std::unique_ptr<Input::ButtonDevice> fallback;
 };
 
 class SDLAnalog final : public Input::AnalogDevice {
 public:
     SDLAnalog(std::shared_ptr<std::vector<std::shared_ptr<SDLJoystick>>> joysticks_, int axis_x_,
-              int axis_y_, float deadzone_, int port_ = -1, bool isController_ = true)
+              int axis_y_, float deadzone_, int port_ = -1, bool isController_ = true,
+              std::unique_ptr<Input::AnalogDevice> fallback_ = nullptr)
         : joysticks(joysticks_), axis_x(axis_x_), axis_y(axis_y_), deadzone(deadzone_),
-          isController(isController_), port(port_) {}
+          isController(isController_), port(port_), fallback(std::move(fallback_)) {}
 
     std::tuple<float, float> GetStatus() const override {
         float rMax = 0.0f, xMax = 0.0f, yMax = 0.0f;
@@ -582,6 +597,9 @@ public:
             if (r > deadzone) {
                 return std::make_tuple(x / r * (r - deadzone) / (1 - deadzone),
                                        y / r * (r - deadzone) / (1 - deadzone));
+            }
+            if (fallback) {
+                return fallback->GetStatus();
             }
             return std::make_tuple<float, float>(0.0f, 0.0f);
         }
@@ -601,6 +619,9 @@ public:
             return std::make_tuple(xMax / rMax * (rMax - deadzone) / (1 - deadzone),
                                    yMax / rMax * (rMax - deadzone) / (1 - deadzone));
         }
+        if (fallback) {
+            return fallback->GetStatus();
+        }
         return std::make_tuple<float, float>(0.0f, 0.0f);
     }
 
@@ -611,6 +632,7 @@ private:
     const float deadzone;
     bool isController;
     int port;
+    std::unique_ptr<Input::AnalogDevice> fallback;
 };
 
 class SDLMotion final : public Input::MotionDevice {
@@ -672,6 +694,10 @@ public:
         const std::string guid = (controller && maptype == "all") ? "" : params.Get("guid", "");
 
         auto joysticks = state.GetJoysticksByGUID(guid);
+        std::unique_ptr<Input::ButtonDevice> fallback;
+        if (params.Has("code") && InputCommon::GetKeyboard()) {
+            fallback = InputCommon::GetKeyboard()->Create(params);
+        }
         if (params.Has("hat")) {
             const int hat = params.Get("hat", 0);
             const std::string direction_name = params.Get("direction", "");
@@ -704,10 +730,11 @@ public:
                 LOG_ERROR(Input, "Unknown direction {}", direction_name);
             }
             return std::make_unique<SDLAxisButton>(joysticks, axis, threshold, trigger_if_greater,
-                                                   port, controller);
+                                                   port, controller, std::move(fallback));
         }
         const int button = params.Get("button", 0);
-        return std::make_unique<SDLButton>(joysticks, button, port, controller);
+        return std::make_unique<SDLButton>(joysticks, button, port, controller,
+                                           std::move(fallback));
     }
 
 private:
@@ -739,8 +766,15 @@ public:
         float deadzone = std::clamp(params.Get("deadzone", 0.0f), 0.0f, .99f);
 
         auto joysticks = state.GetJoysticksByGUID(guid);
+        std::unique_ptr<Input::AnalogDevice> fallback;
+        if (params.Has("up")) {
+            Common::ParamPackage kb_params = params;
+            kb_params.Set("engine", "analog_from_button");
+            fallback = Input::CreateDevice<Input::AnalogDevice>(kb_params.Serialize());
+        }
 
-        return std::make_unique<SDLAnalog>(joysticks, axis_x, axis_y, deadzone, port, controller);
+        return std::make_unique<SDLAnalog>(joysticks, axis_x, axis_y, deadzone, port, controller,
+                                           std::move(fallback));
     }
 
 private:

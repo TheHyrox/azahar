@@ -400,8 +400,296 @@ GMainWindow::GMainWindow(Core::System& system_)
             continue;
         }
 
+        const auto parse_bool_arg = [&args, &i](bool default_val = true) -> bool {
+            if (i + 1 < args.size()) {
+                const QString next = args[i + 1].toLower().trimmed();
+                if (next == QStringLiteral("1") || next == QStringLiteral("true") ||
+                    next == QStringLiteral("on") || next == QStringLiteral("yes")) {
+                    ++i;
+                    return true;
+                }
+                if (next == QStringLiteral("0") || next == QStringLiteral("false") ||
+                    next == QStringLiteral("off") || next == QStringLiteral("no")) {
+                    ++i;
+                    return false;
+                }
+            }
+            return default_val;
+        };
+
+        if (args[i] == QStringLiteral("--layout") || args[i] == QStringLiteral("-l")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("default") || val == QStringLiteral("top-bottom") ||
+                    val == QStringLiteral("vertical") || val == QStringLiteral("0")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::Default;
+                } else if (val == QStringLiteral("single") || val == QStringLiteral("single-top") ||
+                           val == QStringLiteral("top-only") || val == QStringLiteral("1")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::SingleScreen;
+                    if ((val == QStringLiteral("single-top") || val == QStringLiteral("top-only")) &&
+                        !cli_overrides.swap_screen.has_value()) {
+                        cli_overrides.swap_screen = false;
+                    }
+                } else if (val == QStringLiteral("single-bottom") ||
+                           val == QStringLiteral("bottom-only")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::SingleScreen;
+                    if (!cli_overrides.swap_screen.has_value()) {
+                        cli_overrides.swap_screen = true;
+                    }
+                } else if (val == QStringLiteral("large") || val == QStringLiteral("emph-top") ||
+                           val == QStringLiteral("2")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::LargeScreen;
+                } else if (val == QStringLiteral("emph-bottom")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::LargeScreen;
+                    if (!cli_overrides.swap_screen.has_value()) {
+                        cli_overrides.swap_screen = true;
+                    }
+                } else if (val == QStringLiteral("side-by-side") ||
+                           val == QStringLiteral("horizontal") || val == QStringLiteral("side") ||
+                           val == QStringLiteral("3")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::SideScreen;
+                } else if (val == QStringLiteral("separate") || val == QStringLiteral("4")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::SeparateWindows;
+                } else if (val == QStringLiteral("hybrid") || val == QStringLiteral("5")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::HybridScreen;
+                } else if (val == QStringLiteral("custom") || val == QStringLiteral("6")) {
+                    cli_overrides.layout_option = Settings::LayoutOption::CustomLayout;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--small-screen-pos")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("top-right")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::TopRight;
+                } else if (val == QStringLiteral("middle-right")) {
+                    cli_overrides.small_screen_position =
+                        Settings::SmallScreenPosition::MiddleRight;
+                } else if (val == QStringLiteral("bottom-right")) {
+                    cli_overrides.small_screen_position =
+                        Settings::SmallScreenPosition::BottomRight;
+                } else if (val == QStringLiteral("top-left")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::TopLeft;
+                } else if (val == QStringLiteral("middle-left")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::MiddleLeft;
+                } else if (val == QStringLiteral("bottom-left")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::BottomLeft;
+                } else if (val == QStringLiteral("above")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::AboveLarge;
+                } else if (val == QStringLiteral("below")) {
+                    cli_overrides.small_screen_position = Settings::SmallScreenPosition::BelowLarge;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--large-proportion")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                bool ok = false;
+                float prop = args[++i].toFloat(&ok);
+                if (ok && prop >= 1.0f && prop <= 16.0f) {
+                    cli_overrides.large_screen_proportion = prop;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--swap-screens")) {
+            cli_overrides.swap_screen = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--upright") || args[i] == QStringLiteral("-u")) {
+            cli_overrides.upright_screen = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--rotation")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const int deg = args[++i].toInt();
+                cli_overrides.upright_screen = (deg == 90 || deg == 270);
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--gap")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                bool ok = false;
+                const int gap = args[++i].toInt(&ok);
+                if (ok && gap >= 0 && gap <= 256) {
+                    cli_overrides.screen_gap = gap;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--scale") || args[i] == QStringLiteral("-s") ||
+            args[i] == QStringLiteral("--resolution")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                QString val = args[++i].toLower().trimmed();
+                if (val.endsWith(QChar::fromLatin1('x'))) {
+                    val.chop(1);
+                }
+                bool ok = false;
+                const u32 factor = val.toUInt(&ok);
+                if (ok && factor <= 18) {
+                    cli_overrides.resolution_factor = factor;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--graphics-api") ||
+            args[i] == QStringLiteral("--renderer")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("software") || val == QStringLiteral("0")) {
+                    cli_overrides.graphics_api = Settings::GraphicsAPI::Software;
+                } else if (val == QStringLiteral("opengl") || val == QStringLiteral("gl") ||
+                           val == QStringLiteral("1")) {
+                    cli_overrides.graphics_api = Settings::GraphicsAPI::OpenGL;
+                } else if (val == QStringLiteral("vulkan") || val == QStringLiteral("vk") ||
+                           val == QStringLiteral("2")) {
+                    cli_overrides.graphics_api = Settings::GraphicsAPI::Vulkan;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--filter")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("none") || val == QStringLiteral("nofilter") ||
+                    val == QStringLiteral("0")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::NoFilter;
+                } else if (val == QStringLiteral("anime4k") || val == QStringLiteral("1")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::Anime4K;
+                } else if (val == QStringLiteral("bicubic") || val == QStringLiteral("2")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::Bicubic;
+                } else if (val == QStringLiteral("scaleforce") || val == QStringLiteral("3")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::ScaleForce;
+                } else if (val == QStringLiteral("xbrz") || val == QStringLiteral("4")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::xBRZ;
+                } else if (val == QStringLiteral("mmpx") || val == QStringLiteral("5")) {
+                    cli_overrides.texture_filter = Settings::TextureFilter::MMPX;
+                } else if (val == QStringLiteral("linear") || val == QStringLiteral("bilinear")) {
+                    cli_overrides.filter_mode = true;
+                    cli_overrides.texture_sampling = Settings::TextureSampling::Linear;
+                } else if (val == QStringLiteral("nearest")) {
+                    cli_overrides.filter_mode = false;
+                    cli_overrides.texture_sampling = Settings::TextureSampling::NearestNeighbor;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--linear-filter")) {
+            cli_overrides.filter_mode = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--integer-scale")) {
+            cli_overrides.use_integer_scaling = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--aspect-ratio")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("default") || val == QStringLiteral("0")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::Default;
+                } else if (val == QStringLiteral("16:9") || val == QStringLiteral("1")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::R16_9;
+                } else if (val == QStringLiteral("4:3") || val == QStringLiteral("2")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::R4_3;
+                } else if (val == QStringLiteral("21:9") || val == QStringLiteral("3")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::R21_9;
+                } else if (val == QStringLiteral("16:10") || val == QStringLiteral("4")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::R16_10;
+                } else if (val == QStringLiteral("stretch") || val == QStringLiteral("5")) {
+                    cli_overrides.aspect_ratio = Settings::AspectRatio::Stretch;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--vsync")) {
+            cli_overrides.use_vsync = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--3d-mode")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                const QString val = args[++i].toLower().trimmed();
+                if (val == QStringLiteral("off") || val == QStringLiteral("0")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::Off;
+                } else if (val == QStringLiteral("sbs") || val == QStringLiteral("side-by-side") ||
+                           val == QStringLiteral("1")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::SideBySide;
+                } else if (val == QStringLiteral("sbs-full") || val == QStringLiteral("2")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::SideBySideFull;
+                } else if (val == QStringLiteral("anaglyph") || val == QStringLiteral("3")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::Anaglyph;
+                } else if (val == QStringLiteral("interlaced") || val == QStringLiteral("4")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::Interlaced;
+                } else if (val == QStringLiteral("reverse-interlaced") ||
+                           val == QStringLiteral("5")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::ReverseInterlaced;
+                } else if (val == QStringLiteral("vr") || val == QStringLiteral("cardboard") ||
+                           val == QStringLiteral("6")) {
+                    cli_overrides.render_3d = Settings::StereoRenderOption::CardboardVR;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--3d-depth")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                bool ok = false;
+                const u32 depth = args[++i].toUInt(&ok);
+                if (ok && depth <= 100) {
+                    cli_overrides.factor_3d = depth;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--cpu-clock")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                bool ok = false;
+                const s32 pct = args[++i].toInt(&ok);
+                if (ok && pct >= 5 && pct <= 400) {
+                    cli_overrides.cpu_clock_percentage = pct;
+                }
+            }
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--new-3ds")) {
+            cli_overrides.is_new_3ds = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--audio-stretching")) {
+            cli_overrides.enable_audio_stretching = parse_bool_arg(true);
+            continue;
+        }
+
+        if (args[i] == QStringLiteral("--volume")) {
+            if (i + 1 < args.size() && !args[i + 1].startsWith(QChar::fromLatin1('-'))) {
+                bool ok = false;
+                const float vol = args[++i].toFloat(&ok);
+                if (ok) {
+                    cli_overrides.volume = std::clamp(vol > 1.0f ? vol / 100.0f : vol, 0.0f, 1.0f);
+                }
+            }
+            continue;
+        }
+
         // Launch game at path
-        if (i == args.size() - 1 && !args[i].startsWith(QChar::fromLatin1('-'))) {
+        if (!args[i].startsWith(QChar::fromLatin1('-'))) {
             game_path = args[i];
             continue;
         }
@@ -456,6 +744,7 @@ GMainWindow::GMainWindow(Core::System& system_)
     InitializeHotkeys();
 
     SetDefaultUIGeometry();
+    ApplyCLIOverrides();
     RestoreUIState();
 
     ui->action_Dump_Video->setChecked(video_dumping_on_start);
@@ -1579,10 +1868,84 @@ bool GMainWindow::LoadROM(const QString& filename) {
     return true;
 }
 
+void GMainWindow::ApplyCLIOverrides() {
+    if (cli_overrides.layout_option) {
+        Settings::values.layout_option.SetValue(*cli_overrides.layout_option);
+    }
+    if (cli_overrides.small_screen_position) {
+        Settings::values.small_screen_position.SetValue(*cli_overrides.small_screen_position);
+    }
+    if (cli_overrides.large_screen_proportion) {
+        Settings::values.large_screen_proportion.SetValue(*cli_overrides.large_screen_proportion);
+    }
+    if (cli_overrides.swap_screen) {
+        Settings::values.swap_screen.SetValue(*cli_overrides.swap_screen);
+    }
+    if (cli_overrides.upright_screen) {
+        Settings::values.upright_screen.SetValue(*cli_overrides.upright_screen);
+    }
+    if (cli_overrides.screen_gap) {
+        Settings::values.screen_gap.SetValue(*cli_overrides.screen_gap);
+    }
+    if (cli_overrides.resolution_factor) {
+        Settings::values.resolution_factor.SetValue(*cli_overrides.resolution_factor);
+    }
+    if (cli_overrides.graphics_api) {
+        Settings::values.graphics_api.SetValue(*cli_overrides.graphics_api);
+    }
+    if (cli_overrides.texture_filter) {
+        if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::Vulkan &&
+            *cli_overrides.texture_filter == Settings::TextureFilter::Anime4K) {
+            Settings::values.texture_filter.SetValue(Settings::TextureFilter::Bicubic);
+        } else {
+            Settings::values.texture_filter.SetValue(*cli_overrides.texture_filter);
+        }
+    }
+    if (cli_overrides.texture_sampling) {
+        Settings::values.texture_sampling.SetValue(*cli_overrides.texture_sampling);
+    }
+    if (cli_overrides.filter_mode) {
+        Settings::values.filter_mode.SetValue(*cli_overrides.filter_mode);
+    }
+    if (cli_overrides.use_integer_scaling) {
+        Settings::values.use_integer_scaling.SetValue(*cli_overrides.use_integer_scaling);
+    }
+    if (cli_overrides.aspect_ratio) {
+        Settings::values.aspect_ratio.SetValue(*cli_overrides.aspect_ratio);
+    }
+    if (cli_overrides.use_vsync) {
+        Settings::values.use_vsync.SetValue(*cli_overrides.use_vsync);
+    }
+    if (cli_overrides.render_3d) {
+        Settings::values.render_3d.SetValue(*cli_overrides.render_3d);
+        if (*cli_overrides.render_3d != Settings::StereoRenderOption::Off &&
+            !cli_overrides.factor_3d && Settings::values.factor_3d.GetValue() == 0) {
+            Settings::values.factor_3d.SetValue(50);
+        }
+    }
+    if (cli_overrides.factor_3d) {
+        Settings::values.factor_3d.SetValue(*cli_overrides.factor_3d);
+    }
+    if (cli_overrides.cpu_clock_percentage) {
+        Settings::values.cpu_clock_percentage.SetValue(*cli_overrides.cpu_clock_percentage);
+    }
+    if (cli_overrides.is_new_3ds) {
+        Settings::values.is_new_3ds.SetValue(*cli_overrides.is_new_3ds);
+    }
+    if (cli_overrides.enable_audio_stretching) {
+        Settings::values.enable_audio_stretching.SetValue(*cli_overrides.enable_audio_stretching);
+    }
+    if (cli_overrides.volume) {
+        Settings::values.volume.SetValue(*cli_overrides.volume);
+    }
+}
+
 void GMainWindow::BootGame(const QString& filename) {
     if (emu_thread) {
         ShutdownGame();
     }
+
+    ApplyCLIOverrides();
 
     // NOTE: We could make this not hardcoded, but it's a temp thing anyway so probs not worth. -OS
     if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::Vulkan &&
@@ -1646,6 +2009,9 @@ void GMainWindow::BootGame(const QString& filename) {
         LOG_INFO(Frontend, "Loading per application config file for title {}", config_file_name);
         QtConfig per_game_config(config_file_name, QtConfig::ConfigType::PerGameConfig);
     }
+
+    ApplyCLIOverrides();
+    SyncMenuUISettings();
 
     // Artic Server cannot accept a client multiple times, so multiple loaders are not
     // possible. Instead register the app loader early and do not create it again on system load.
